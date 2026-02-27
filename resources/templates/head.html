@@ -1,0 +1,42 @@
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Videoahmatti</title>
+    <link rel="stylesheet" href="/css/pico.min.css">
+    <style>
+        :root {
+            --pico-typography-spacing-vertical: 0.5rem;
+        }
+
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .gallery article {
+            margin: 0;
+            padding: 0.5rem;
+        }
+
+        .gallery img {
+            width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 0.25rem;
+        }
+
+        .gallery p {
+            margin: 0.5rem 0 0;
+            font-size: 0.9rem;
+            line-height: 1.2;
+        }
+
+        video {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+    </style>
+</head>

@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+
+{% include "templates/head.html" %}
+
+<body>
+    <main class="container">
+        <h1>Videos</h1>
+        {% for group in grouped %}
+        <details {% if forloop.first %}open{% endif %}>
+            <summary role="button" class="secondary">{{ group.month_label }} — {{ group.videos | length }} videos</summary>
+            <section class="gallery">
+                {% for video in group.videos %}
+                <article>
+                    <a href="/videos/{{ video.id }}">
+                        <img src="/api/videos/{{ video.id }}/thumbnail" loading="lazy" width="320" height="180">
+                    </a>
+                    <p><a href="/videos/{{ video.id }}">{{ video.display_filename }}</a></p>
+                </article>
+                {% endfor %}
+            </section>
+        </details>
+        {% endfor %}
+    </main>
+</body>
+
+</html>
