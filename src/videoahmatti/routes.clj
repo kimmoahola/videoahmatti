@@ -23,10 +23,6 @@
   (when (and (= method :get) (some? page-id))
     (video/watch-page ctx request page-id)))
 
-(defn- route-health [_ctx {:keys [method uri]}]
-  (when (and (= method :get) (= uri "/health"))
-    (util/json-response 200 {:status "ok"})))
-
 (defn- route-static [_ctx {:keys [method uri]}]
   (when (= method :get)
     (let [file (io/file (str "resources/public" uri))]
@@ -73,7 +69,6 @@
 (defn- route-request [ctx request]
   (let [dispatch (some-fn (partial route-home ctx)
                           (partial route-watch-page ctx)
-                          (partial route-health ctx)
                           (partial route-static ctx)
                           (partial route-videos-list ctx)
                           (partial route-video-stream ctx)
