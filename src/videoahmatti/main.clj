@@ -9,9 +9,8 @@
 
 (defn -main [& _args]
   (let [cfg (config/load-config)
-        datasource (db/make-datasource cfg)
-        queue-state (jobs/start-job-system cfg)]
+        datasource (db/make-datasource cfg)]
     (db/ensure-schema! datasource)
     (jobs/start-video-scan-scheduler! cfg datasource)
-    (server/start! cfg datasource queue-state)
+    (server/start! cfg datasource)
     (log/info "Videoahmatti started")))

@@ -82,8 +82,3 @@
             (recur)))))
     {:stop-chan stop-chan
      :interval-seconds interval-seconds}))
-
-(defn start-job-system [cfg]
-  (let [queue-size (get-in cfg [:jobs :queue-size])
-        input-chan (async/chan queue-size)]
-    {:input-chan input-chan}))

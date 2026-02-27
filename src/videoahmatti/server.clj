@@ -6,12 +6,11 @@
 
 (defonce server* (atom nil))
 
-(defn start! [cfg datasource queue-state]
+(defn start! [cfg datasource]
   (let [host (get-in cfg [:app :host])
         port (get-in cfg [:app :port])
         handler (routes/make-handler {:config cfg
-                                      :datasource datasource
-                                      :queue-state queue-state})]
+                                      :datasource datasource})]
     (when @server*
       (@server*)
       (reset! server* nil))

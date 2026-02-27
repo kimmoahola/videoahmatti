@@ -38,8 +38,6 @@ Environment variables:
 - `VIDEOAHMATTI_PORT` (default: `8080`)
 - `VIDEOAHMATTI_VIDEO_ROOT` (default: `./videos`)
 - `VIDEOAHMATTI_JDBC_URL` (default: `jdbc:sqlite:./data/videoahmatti.db`)
-- `VIDEOAHMATTI_JOB_QUEUE_SIZE` (default: `256`)
-- `VIDEOAHMATTI_WORKER_COUNT` (default: `1`, currently reserved for upcoming worker loop)
 
 Example:
 
