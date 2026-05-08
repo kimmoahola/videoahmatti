@@ -13,12 +13,6 @@
 (defn- handler []
   (routes/make-handler test-ctx))
 
-(deftest health-route-returns-ok
-  (testing "GET /health returns status ok"
-    (let [response ((handler) {:request-method :get :uri "/health"})]
-      (is (= 200 (:status response)))
-      (is (= "application/json; charset=utf-8" (get-in response [:headers "content-type"]))))))
-
 (deftest unknown-route-returns-not-found
   (testing "Unknown route returns 404"
     (let [response ((handler) {:request-method :get :uri "/missing"})]

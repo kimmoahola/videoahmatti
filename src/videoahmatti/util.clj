@@ -23,3 +23,8 @@
 
 (defn html-escape [value]
   (str/escape (str value) {\& "&amp;" \< "&lt;" \> "&gt;" \" "&quot;" \' "&#39;"}))
+
+(defn filter-map-vals
+  "Return a map containing only entries whose values satisfy pred."
+  [pred coll]
+  (into {} (filter (fn [[_ value]] (pred value)) coll)))

@@ -1,84 +1,57 @@
 (ns videoahmatti.jobs
   (:require
    [clojure.core.async :as async]
-   [clojure.java.io :as io]
-   [clojure.string :as str]
    [clojure.tools.logging :as log]
-   [videoahmatti.db :as db])
-  (:import
-   (java.nio.file Files)))
+   [videoahmatti.jobs.detection :as detection]
+   [videoahmatti.jobs.videos-scan :as videos-scan]))
 
-(def video-extensions
-  #{"mp4" "mkv" "webm" "mov" "avi" "m4v"})
+(defonce background-jobs {:scan-videos (atom false)
+                          :detection (atom false)})
 
-(defn- extension-of [filename]
-  (some-> filename
-          (str/split #"\.")
-          last
-          str/lower-case))
+(defn- run-exclusive-job! [job-key trigger f]
+  (let [job-atom (get background-jobs job-key)]
+    (if (compare-and-set! job-atom false true)
+      (async/thread
+        (try
+          (log/infof "Starting %s job (trigger=%s)" (name job-key) trigger)
+          (f)
+          (catch Exception e
+            (log/error e (format "%s job failed (trigger=%s)" (name job-key) trigger)))
+          (finally
+            (reset! job-atom false))))
+      (do
+        (log/infof "Dropping %s job request (trigger=%s): job already running"
+                   (name job-key)
+                   trigger)
+        nil))))
 
-(defn- video-file? [path]
-  (and (Files/isRegularFile path (make-array java.nio.file.LinkOption 0))
-       (->> path
-            .getFileName
-            str
-            extension-of
-            (contains? video-extensions))))
+(defn trigger-detection-pass! [datasource trigger]
+  (run-exclusive-job!
+   :detection
+   trigger
+   (fn []
+     (detection/run-detection-pass! datasource))))
 
-(defn- walk-files [root-path]
-  (with-open [stream (Files/walk root-path (make-array java.nio.file.FileVisitOption 0))]
-    (doall
-     (for [path (iterator-seq (.iterator stream))
-           :when (video-file? path)]
-       path))))
-
-(defn latest-file-in-path [path]
-  (let [root-file (io/file (str path))
-        files (filter #(video-file? (.toPath %))
-                      (file-seq root-file))]
-    (when (seq files)
-      (apply max-key
-             #(.lastModified ^java.io.File %)
-             files))))
-
-(defn- file-path->db [path]
-  {:storage-path (.toString path)
-   :filename (str (.getFileName path))})
-
-(defn scan-videos! [cfg datasource]
-  (let [start-time (System/currentTimeMillis)
-        root-path (.toPath (io/file (get-in cfg [:app :video-root])))
-        latest-file (.toString (latest-file-in-path root-path))
-        result (if (and latest-file
-                        (not (db/find-video-by-storage-path datasource latest-file)))
-                 (reduce
-                  (fn [acc path]
-                    (cond-> (update acc :scanned inc)
-                      (db/insert-video! datasource (file-path->db path))
-                      (update :inserted inc)))
-                  {:scanned 0 :inserted 0}
-                  (walk-files root-path))
-                 {:scanned 0 :inserted 0})]
-    (log/infof "Video scan completed in %d ms with result %s"
-               (- (System/currentTimeMillis) start-time)
-               result)
-    result))
+(defn trigger-video-scan! [cfg datasource trigger]
+  (run-exclusive-job!
+   :scan-videos
+   trigger
+   (fn []
+     (videos-scan/scan-videos! cfg datasource)
+     (trigger-detection-pass! datasource :scan-finished))))
 
 (defn start-video-scan-scheduler! [cfg datasource]
   (let [interval-seconds (get-in cfg [:jobs :scan-interval-seconds])
         interval-ms (* 1000 interval-seconds)
         stop-chan (async/chan)]
     (log/infof "Starting periodic video scan scheduler (interval=%ss)" interval-seconds)
-    (scan-videos! cfg datasource)
+    (trigger-video-scan! cfg datasource :startup)
     (async/go-loop []
       (let [[_ channel] (async/alts! [stop-chan (async/timeout interval-ms)])]
         (if (= channel stop-chan)
           (log/info "Video scan scheduler stopped")
           (do
-            (try
-              (scan-videos! cfg datasource)
-              (catch Exception e
-                (log/error e "Periodic scan failed")))
+            (trigger-video-scan! cfg datasource :interval)
             (recur)))))
     {:stop-chan stop-chan
      :interval-seconds interval-seconds}))

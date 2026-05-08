@@ -33,6 +33,45 @@
             line-height: 1.2;
         }
 
+        .detections-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0;
+        }
+
+        .detection-chip {
+            color: black;
+            display: inline-block;
+            padding: 0.15rem 0.45rem;
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: 999px;
+            background: rgb(215, 251, 193);
+            line-height: 1.2;
+        }
+
+        .muted {
+            color: var(--pico-muted-color);
+        }
+
+        .watch-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .watch-actions a {
+            margin-bottom: 0;
+        }
+
+        .watch-actions a.disabled {
+            pointer-events: none;
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         video {
             max-width: 100%;
             height: auto;

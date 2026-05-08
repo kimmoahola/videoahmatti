@@ -2,6 +2,7 @@ create table if not exists videos (
 	id integer primary key autoincrement,
 	storage_path text not null unique,
 	filename text not null,
+	detections text,
 	duration_sec real,
 	discovered_at text not null default current_timestamp
 );

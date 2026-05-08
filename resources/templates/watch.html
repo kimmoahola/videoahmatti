@@ -5,11 +5,35 @@
 
 <body>
     <main class="container">
-        <p><a role="button" href="/">Back to list</a></p>
+        <nav class="watch-actions" aria-label="Video navigation">
+            {% if previous_video_id %}
+            <a role="button" class="secondary" href="/videos/{{ previous_video_id }}">Previous</a>
+            {% else %}
+            <a role="button" class="secondary disabled" aria-disabled="true">Previous</a>
+            {% endif %}
+            <a role="button" href="/">Back to list</a>
+            {% if next_video_id %}
+            <a role="button" class="secondary" href="/videos/{{ next_video_id }}">Next</a>
+            {% else %}
+            <a role="button" class="secondary disabled" aria-disabled="true">Next</a>
+            {% endif %}
+        </nav>
         <h1>{{ display_filename }}</h1>
         <p><video controls autoplay muted playsinline src="/api/videos/{{ id }}/stream"></video></p>
         <p><a role="button" href="/api/videos/{{ id }}/download">Download video</a></p>
         <p><a role="button" href="/api/videos/{{ id }}/download-compatible">Download compatible video (H.264)</a></p>
+        <section>
+            <h3>Detections</h3>
+            {% if display_detections %}
+            <p class="detections-row">
+                {% for detection in display_detections %}
+                <small class="detection-chip">{{ detection }}</small>
+                {% endfor %}
+            </p>
+            {% else %}
+            <p><small class="muted">No detections yet</small></p>
+            {% endif %}
+        </section>
     </main>
 </body>
 

@@ -1,10 +1,27 @@
 (ns videoahmatti.db
   (:require
-  [clojure.java.io :as io]
-  [clojure.string :as str]
-  [clojure.tools.logging :as log]
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [clojure.tools.logging :as log]
+   [jsonista.core :as json]
    [next.jdbc :as jdbc]
    [next.jdbc.result-set :as rs]))
+
+(def ^:private json-mapper
+  (json/object-mapper))
+
+(defn- read-detections [value]
+  (when (and (string? value) (not (str/blank? value)))
+    (json/read-value value json-mapper)))
+
+(defn- write-detections [detections]
+  (when (some? detections)
+    (json/write-value-as-string detections json-mapper)))
+
+(defn- with-parsed-detections [video]
+  (if (nil? video)
+    nil
+    (update video :detections read-detections)))
 
 (defn ensure-schema! [datasource]
   (if-let [schema-resource (io/resource "schema.sql")]
@@ -35,13 +52,67 @@
       inserted)))
 
 (defn list-videos [datasource]
-  (jdbc/execute! datasource ["select id, storage_path, filename, duration_sec, discovered_at from videos order by filename desc"] {:builder-fn rs/as-unqualified-lower-maps}))
+  (mapv with-parsed-detections
+        (jdbc/execute! datasource
+                       ["select id, storage_path, filename, detections, duration_sec, discovered_at from videos order by filename desc, id desc"]
+                       {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn find-adjacent-videos [datasource {:keys [id filename]}]
+  {:previous
+   (with-parsed-detections
+     (first (jdbc/execute! datasource
+                           ["select id, storage_path, filename, detections, duration_sec, discovered_at
+                             from videos
+                             where filename > ? or (filename = ? and id > ?)
+                             order by filename asc, id asc
+                             limit 1"
+                            filename
+                            filename
+                            id]
+                           {:builder-fn rs/as-unqualified-lower-maps})))
+   :next
+   (with-parsed-detections
+     (first (jdbc/execute! datasource
+                           ["select id, storage_path, filename, detections, duration_sec, discovered_at
+                             from videos
+                             where filename < ? or (filename = ? and id < ?)
+                             order by filename desc, id desc
+                             limit 1"
+                            filename
+                            filename
+                            id]
+                           {:builder-fn rs/as-unqualified-lower-maps})))})
 
 (defn find-video-by-id [datasource video-id]
-  (first (jdbc/execute! datasource ["select id, storage_path, filename, duration_sec, discovered_at from videos where id = ?" video-id] {:builder-fn rs/as-unqualified-lower-maps})))
+  (with-parsed-detections
+    (first (jdbc/execute! datasource
+                          ["select id, storage_path, filename, detections, duration_sec, discovered_at from videos where id = ?" video-id]
+                          {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn find-video-by-storage-path [datasource storage-path]
-  (first (jdbc/execute! datasource ["select id, storage_path, filename, duration_sec, discovered_at from videos where storage_path = ?" storage-path] {:builder-fn rs/as-unqualified-lower-maps})))
+  (with-parsed-detections
+    (first (jdbc/execute! datasource
+                          ["select id, storage_path, filename, detections, duration_sec, discovered_at from videos where storage_path = ?" storage-path]
+                          {:builder-fn rs/as-unqualified-lower-maps}))))
+
+(defn find-next-undetected-video [datasource]
+  (with-parsed-detections
+    (first (jdbc/execute! datasource
+                          ["select id, storage_path, filename, detections, duration_sec, discovered_at
+                            from videos
+                            where detections is null
+                            order by filename desc, id desc
+                            limit 1"]
+                          {:builder-fn rs/as-unqualified-lower-maps}))))
+
+(defn set-video-detections! [datasource video-id detections]
+  (jdbc/execute-one!
+   datasource
+   ["update videos
+     set detections = ?
+     where id = ?"
+    (write-detections detections)
+    video-id]))
 
 (defn find-thumbnail [datasource video-id]
   (first (jdbc/execute! datasource ["select id, video_id, image_blob, width, height, mime_type, generated_at from thumbnails where video_id = ?" video-id] {:builder-fn rs/as-unqualified-lower-maps})))

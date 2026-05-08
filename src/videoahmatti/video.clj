@@ -4,9 +4,10 @@
    [clojure.string :as str]
    [selmer.parser :as selmer]
    [videoahmatti.db :as db]
-   [videoahmatti.workers :as workers]
+   [videoahmatti.jobs.thumbnail :as thumbnail]
    [videoahmatti.util :as util]
-   [videoahmatti.validation :as validation]))
+   [videoahmatti.validation :as validation]
+   [videoahmatti.workers :as workers]))
 
 (defn extract-datetime-from-filename [filename]
   (when-let [match (re-find #"(\d{14})" filename)]
@@ -45,6 +46,31 @@
   (when datetime-str
     (str (subs datetime-str 0 4) "-" (subs datetime-str 4 6))))
 
+#_[["vehicle" 0.9838]
+   ["white-tailed deer" 0.982]
+   ["bobcat" 0.8206]
+   ["mule deer" 0.0896]
+   ["sika deer" 0.0752]]
+#_->
+#_["vehicle (0.98)" "white-tailed deer (0.98)" "bobcat (0.82)"]
+(defn format-detections
+  "Prepare detections for rendering as stable, human-readable labels."
+  [detections]
+  (let [entries (->> detections
+                     (filter (fn [[label score]]
+                               (and (string? label)
+                                    (number? score))))
+                     vec)
+        top-entry (when (seq entries)
+                    (apply max-key second entries))
+        high-confidence (filter (fn [[_ score]] (>= score 0.6)) entries)
+        selected (if top-entry
+                   (distinct (cons top-entry high-confidence))
+                   high-confidence)]
+    (mapv (fn [[label score]]
+            (str label " (" (format "%.2f" (double score)) ")"))
+          selected)))
+
 (defn month-year-label [year-month]
   (if (= year-month "unknown")
     "Unknown date"
@@ -70,7 +96,9 @@
     (mapv (fn [[year-month video-list]]
             {:month_label (month-year-label year-month)
              :videos (mapv (fn [video]
-                             (assoc video :display_filename (extract-formatted-filename (:filename video))))
+                             (-> video
+                                 (assoc :display_filename (extract-formatted-filename (:filename video)))
+                                 (assoc :display_detections (format-detections (:detections video)))))
                            video-list)})
           grouped)))
 
@@ -83,9 +111,14 @@
 (defn watch-page [{:keys [datasource]} _request raw-id]
   (if (validation/valid-video-id? raw-id)
     (if-let [video (db/find-video-by-id datasource raw-id)]
-      (let [display-filename (extract-formatted-filename (:filename video))
-            html (selmer/render-file "templates/watch.html" 
-                                     (assoc video :display_filename display-filename))]
+      (let [{:keys [previous next]} (db/find-adjacent-videos datasource video)
+            display-filename (extract-formatted-filename (:filename video))
+            html (selmer/render-file "templates/watch.html"
+                                     (-> video
+                                         (assoc :display_filename display-filename)
+                                         (assoc :display_detections (format-detections (:detections video)))
+                                         (assoc :previous_video_id (:id previous))
+                                         (assoc :next_video_id (:id next))))]
         (util/html-response 200 html))
       (util/text-response 404 "video-not-found"))
     (util/text-response 400 "invalid-video-id")))
@@ -172,8 +205,8 @@
           {:status 200
            :headers {"content-type" "video/mp4"
                      "content-disposition" (str "attachment; filename=\""
-                                                 (compatible-download-filename (:filename video))
-                                                 "\"")}
+                                                (compatible-download-filename (:filename video))
+                                                "\"")}
            :body (temp-file-input-stream (:file conversion))}
           (if (:busy? conversion)
             (util/json-response 429 {:error "video-conversion-busy"})
@@ -181,26 +214,9 @@
       (util/json-response 404 {:error "video-not-found"}))
     (util/json-response 400 {:error "invalid-video-id"})))
 
-(defn get-or-generate-thumbnail [datasource video-id]
-  (if-let [thumbnail (db/find-thumbnail datasource video-id)]
-    thumbnail
-    (when-let [video (db/find-video-by-id datasource video-id)]
-      (let [result (workers/generate-thumbnail-bytes (:storage_path video)
-                                                     {:timestamp-sec 8
-                                                      :width 320
-                                                      :height 180})]
-        (when (:ok? result)
-          (db/upsert-thumbnail! datasource {:video-id video-id
-                                            :image-blob (:image-bytes result)
-                                            :width (:width result)
-                                            :height (:height result)
-                                            :mime-type (:mime-type result)})
-          (db/find-thumbnail datasource video-id))))))
-
-
 (defn get-thumbnail [{:keys [datasource]} _request raw-id]
   (if (validation/valid-video-id? raw-id)
-    (let [thumbnail (get-or-generate-thumbnail datasource raw-id)]
+    (let [thumbnail (thumbnail/get-or-generate-thumbnail! datasource raw-id)]
       (if thumbnail
         {:status 200
          :headers {"content-type" (or (:mime_type thumbnail) "image/jpeg")
