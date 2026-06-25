@@ -1,0 +1,8 @@
+target/
+.lsp/
+.vscode/
+.cpcache/
+.clj-kondo/
+venv/
+videos/
+.DS_Store

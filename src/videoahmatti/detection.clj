@@ -1,12 +1,10 @@
-(ns videoahmatti.jobs.detection
+(ns videoahmatti.detection
   (:require
    [clojure.java.shell :as shell]
    [clojure.string :as str]
    [clojure.tools.logging :as log]
    [jsonista.core :as json]
-   [videoahmatti.db :as db]
-   [videoahmatti.util :as util]
-   [videoahmatti.workers :as workers]) 
+   [videoahmatti.db :as db])
   (:import
    [java.nio.file Files]))
 
@@ -40,22 +38,22 @@
    ["domestic cattle" 0.0157]
    ["lepus species" 0.013]]
 #_(defn- read-predictions-json [predictions-json-path]
-  (->> (:predictions (json/read-value (slurp predictions-json-path) json-mapper))
-       (map :classifications)
-       (map (fn [i]
-              (zipmap (map #(last (str/split % #";")) (:classes i))
-                      (:scores i))))
-       (apply merge-with max)
-       (util/filter-map-vals #(>= % 0.01))
-       (#(dissoc % "blank"))
+    (->> (:predictions (json/read-value (slurp predictions-json-path) json-mapper))
+         (map :classifications)
+         (map (fn [i]
+                (zipmap (map #(last (str/split % #";")) (:classes i))
+                        (:scores i))))
+         (apply merge-with max)
+         (util/filter-map-vals #(>= % 0.01))
+         (#(dissoc % "blank"))
 
-       (sort-by val >)
-       vec))
+         (sort-by val >)
+         vec))
 
 (defn- read-predictions-json [predictions-json-path]
-  (prn "read-predictions-json" predictions-json-path
-       (->> (:predictions (json/read-value (slurp "data/predictions.json") json-mapper))
-            (map #(select-keys % [:prediction :prediction_score :classifications]))))
+  #_(prn "read-predictions-json" predictions-json-path
+         (->> (:predictions (json/read-value (slurp "data/predictions.json") json-mapper))
+              (map #(select-keys % [:prediction :prediction_score :classifications]))))
   (->> (:predictions (json/read-value (slurp predictions-json-path) json-mapper))
        (map (fn [x] {(-> x :prediction (str/split #";") last)
                      (:prediction_score x)}))
@@ -114,5 +112,6 @@
 
 (defn run-detection-pass! [datasource]
   (let [result (run-undetected-video-detection-loop! datasource)]
-    (log/infof "Animal detection pass finished: %s" result)
+    (when (not= result {:processed 0 :status :done})
+      (log/infof "Animal detection pass finished: %s" result))
     result))

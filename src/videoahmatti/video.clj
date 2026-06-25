@@ -1,13 +1,13 @@
 (ns videoahmatti.video
   (:require
    [clojure.java.io :as io]
+   [clojure.java.shell :as shell]
    [clojure.string :as str]
    [selmer.parser :as selmer]
    [videoahmatti.db :as db]
-   [videoahmatti.jobs.thumbnail :as thumbnail]
+   [videoahmatti.thumbnail :as thumbnail]
    [videoahmatti.util :as util]
-   [videoahmatti.validation :as validation]
-   [videoahmatti.workers :as workers]))
+   [videoahmatti.validation :as validation]))
 
 (defn extract-datetime-from-filename [filename]
   (when-let [match (re-find #"(\d{14})" filename)]
@@ -197,10 +197,43 @@
           (finally
             (.delete file)))))))
 
+(defonce ^:private conversion-in-progress? (atom false))
+
+(defn convert-video-to-compatible-temp-file [video-path]
+  (if (compare-and-set! conversion-in-progress? false true)
+    (let [temp-file (java.io.File/createTempFile "videoahmatti-converted-" ".mp4")]
+      (try
+        (let [result (shell/sh "ffmpeg"
+                               "-y"
+                               "-i" video-path
+                               "-c:v" "libx264"
+                               "-preset" "veryfast"
+                               "-crf" "23"
+                               "-c:a" "aac"
+                               "-b:a" "128k"
+                               "-movflags" "+faststart"
+                               (.getAbsolutePath temp-file))]
+          (if (zero? (:exit result))
+            {:ok? true
+             :file temp-file}
+            (do
+              (.delete temp-file)
+              {:ok? false
+               :error (or (:err result) "ffmpeg failed")})))
+        (catch Exception e
+          (.delete temp-file)
+          {:ok? false
+           :error (or (.getMessage e) "ffmpeg failed")})
+        (finally
+          (reset! conversion-in-progress? false))))
+    {:ok? false
+     :busy? true
+     :error "video-conversion-busy"}))
+
 (defn download-video-compatible [{:keys [datasource]} _request raw-id]
   (if (validation/valid-video-id? raw-id)
     (if-let [video (db/find-video-by-id datasource raw-id)]
-      (let [conversion (workers/convert-video-to-compatible-temp-file (:storage_path video))]
+      (let [conversion (convert-video-to-compatible-temp-file (:storage_path video))]
         (if (:ok? conversion)
           {:status 200
            :headers {"content-type" "video/mp4"

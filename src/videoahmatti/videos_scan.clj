@@ -1,4 +1,4 @@
-(ns videoahmatti.jobs.videos-scan
+(ns videoahmatti.videos-scan
   (:require
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -7,7 +7,7 @@
   (:import
    (java.nio.file Files)))
 
-(def video-extensions
+(def ^:private video-extensions
   #{"mp4" "mkv" "webm" "mov" "avi" "m4v"})
 
 (defn- extension-of [filename]
@@ -48,6 +48,8 @@
   (let [start-time (System/currentTimeMillis)
         root-path (.toPath (io/file (get-in cfg [:app :video-root])))
         latest-file (.toString (latest-file-in-path root-path))
+        _ (when-not latest-file
+            (throw (ex-info "No video files found in video root" {:video-root root-path})))
         result (if (and latest-file
                         (not (db/find-video-by-storage-path datasource latest-file)))
                  (reduce

@@ -5,3 +5,7 @@ VIDEOAHMATTI_VIDEO_ROOT = './videos'
 VIDEOAHMATTI_JDBC_URL = 'jdbc:sqlite:./data/videoahmatti.db'
 VIDEOAHMATTI_MIGRATIONS_DIR = 'migrations'
 VIDEOAHMATTI_WORKER_COUNT = 1
+_.python.venv = { path = "venv", create = true }
+
+[tools]
+python = "3.12"

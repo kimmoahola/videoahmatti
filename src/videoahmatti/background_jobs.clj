@@ -1,9 +1,9 @@
-(ns videoahmatti.jobs
+(ns videoahmatti.background-jobs
   (:require
    [clojure.core.async :as async]
    [clojure.tools.logging :as log]
-   [videoahmatti.jobs.detection :as detection]
-   [videoahmatti.jobs.videos-scan :as videos-scan]))
+   [videoahmatti.detection :as detection]
+   [videoahmatti.videos-scan :as videos-scan]))
 
 (defonce background-jobs {:scan-videos (atom false)
                           :detection (atom false)})
@@ -13,7 +13,7 @@
     (if (compare-and-set! job-atom false true)
       (async/thread
         (try
-          (log/infof "Starting %s job (trigger=%s)" (name job-key) trigger)
+          #_(log/infof "Starting %s job (trigger=%s)" (name job-key) trigger)
           (f)
           (catch Exception e
             (log/error e (format "%s job failed (trigger=%s)" (name job-key) trigger)))
@@ -40,10 +40,31 @@
      (videos-scan/scan-videos! cfg datasource)
      (trigger-detection-pass! datasource :scan-finished))))
 
+(defn ensure-python-deps!
+  "Ensures that the Python dependencies are installed.
+   The deps are installed here instead of the Dockerfile to greatly reduce docker image size."
+  []
+  (let [venv-path "venv"
+        pip-path (str venv-path "/bin/pip")]
+    (when-not (.exists (java.io.File. pip-path))
+      (log/info "Python virtual environment not found, creating...")
+      (let [process (-> (ProcessBuilder. ["python3" "-m" "venv" venv-path])
+                        (.redirectErrorStream true)
+                        (.start))]
+        (.waitFor process)
+        (log/info "Python virtual environment created")))
+    (log/info "Installing Python dependencies...")
+    (let [process (-> (ProcessBuilder. [pip-path "install" "--disable-pip-version-check" "-r" "requirements.txt"])
+                      (.redirectErrorStream true)
+                      (.start))]
+      (.waitFor process)
+      (log/info "Python dependencies installed"))))
+
 (defn start-video-scan-scheduler! [cfg datasource]
   (let [interval-seconds (get-in cfg [:jobs :scan-interval-seconds])
         interval-ms (* 1000 interval-seconds)
         stop-chan (async/chan)]
+    (ensure-python-deps!)
     (log/infof "Starting periodic video scan scheduler (interval=%ss)" interval-seconds)
     (trigger-video-scan! cfg datasource :startup)
     (async/go-loop []

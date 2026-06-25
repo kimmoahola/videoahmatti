@@ -27,6 +27,7 @@ Personal self-hosted video browser/player for mounted video files.
 - Java 21+ (or compatible JVM)
 - Clojure CLI (`clojure`)
 - Mounted video directory available on local filesystem
+- https://mise.jdx.dev/ installed
 
 ## Configuration
 
@@ -47,6 +48,8 @@ export VIDEOAHMATTI_JDBC_URL="jdbc:sqlite:./data/videoahmatti.db"
 ```
 
 ## Run
+
+`pip install -r requirements.txt`
 
 Put your local values in `.env` (project root), then start the app:
 

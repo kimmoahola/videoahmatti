@@ -1,15 +1,13 @@
-(ns videoahmatti.jobs.thumbnail
+(ns videoahmatti.thumbnail
   (:require
    [clojure.java.shell :as shell]
    [clojure.tools.logging :as log]
-   [videoahmatti.db :as db]) 
+   [videoahmatti.db :as db])
   (:import
    [java.nio.file Files]))
 
 (defn generate-thumbnail-bytes [video-path {:keys [timestamp-sec width height]}]
   (log/infof "generate-thumbnail-bytes: video-path=%s" video-path)
-  #_(util/wait-for-atom-value! (get jobs/background-jobs :thumbnail) false?)
-  #_(log/infof "generate-thumbnail-bytes: continuing video-path=%s" video-path)
   (let [temp-file (java.io.File/createTempFile "videoahmatti-thumb-" ".jpg")]
     (try
       (let [result (shell/sh "ffmpeg"
