@@ -1,5 +1,5 @@
 create table if not exists videos (
-	id integer primary key autoincrement,
+	id integer primary key,
 	storage_path text not null unique,
 	filename text not null,
 	detections text,
@@ -10,7 +10,7 @@ create table if not exists videos (
 create index if not exists idx_videos_storage_path on videos(storage_path);
 
 create table if not exists thumbnails (
-	id integer primary key autoincrement,
+	id integer primary key,
 	video_id integer not null unique,
 	image_blob blob not null,
 	width integer,
