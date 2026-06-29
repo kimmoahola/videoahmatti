@@ -1,5 +1,6 @@
 (ns videoahmatti.detection
   (:require
+   [clojure.java.io :as io]
    [clojure.java.shell :as shell]
    [clojure.string :as str]
    [clojure.tools.logging :as log]
@@ -10,18 +11,26 @@
 
 (defn- extract-images-from-video [video-path]
   (let [image-every-n-secs 5
-        temp-dir (Files/createTempDirectory "videoahmatti-frames" (make-array java.nio.file.attribute.FileAttribute 0))]
+        temp-dir (Files/createTempDirectory "videoahmatti-frames" (make-array java.nio.file.attribute.FileAttribute 0))
+        result (shell/sh "ffmpeg"
+                         "-i" video-path
+                         "-vf" (str "fps=1/" image-every-n-secs)
+                         (str (.toString temp-dir) "/frame-%04d.jpg"))]
+    (if (zero? (:exit result))
+      temp-dir
+      (throw (ex-info (or (:err result) "ffmpeg failed") {})))))
+
+(defn- delete-directory-recursively! [path]
+  (doseq [file (reverse (file-seq (io/file (str path))))]
+    (Files/deleteIfExists (.toPath file)))
+  (Files/deleteIfExists path))
+
+(defn- with-extracted-images [video-path f]
+  (let [images-path (extract-images-from-video video-path)]
     (try
-      (let [result (shell/sh "ffmpeg"
-                             "-i" video-path
-                             "-vf" (str "fps=1/" image-every-n-secs)
-                             (str (.toString temp-dir) "/frame-%04d.jpg"))]
-        (if (zero? (:exit result))
-          temp-dir
-          (throw (ex-info (or (:err result) "ffmpeg failed") {}))))
-      (catch Exception e
-        (Files/deleteIfExists temp-dir)
-        (throw e)))))
+      (f images-path)
+      (finally
+        (delete-directory-recursively! images-path)))))
 
 (def ^:private json-mapper
   (json/object-mapper {:decode-key-fn keyword}))
@@ -64,33 +73,35 @@
 
 (defn- detect-video-animals [video-path]
   (log/infof "Starting animal detection for %s" video-path)
-  (let [images-path (extract-images-from-video video-path)
-        predictions-json-path (str images-path "/predictions.json")
-        result (shell/sh "venv/bin/python"
-                         "-m"
-                         "speciesnet.scripts.run_model"
-                         "--noprogress_bars"
-                         "--bypass_prompts"
-                         "--country"
-                         "FIN"
-                         "--folders"
-                         (str images-path)
-                         "--predictions_json"
-                         predictions-json-path)]
-    (if (zero? (:exit result))
-      (try
-        (let [detections (read-predictions-json predictions-json-path)]
-          (log/infof "Animal detection completed for video=%s results=%s"
-                     video-path
-                     detections)
-          {:ok? true
-           :detections detections})
-        (catch Exception e
+  (with-extracted-images
+    video-path
+    (fn [images-path]
+      (let [predictions-json-path (str images-path "/predictions.json")
+            result (shell/sh "venv/bin/python"
+                             "-m"
+                             "speciesnet.scripts.run_model"
+                             "--noprogress_bars"
+                             "--bypass_prompts"
+                             "--country"
+                             "FIN"
+                             "--folders"
+                             (str images-path)
+                             "--predictions_json"
+                             predictions-json-path)]
+        (if (zero? (:exit result))
+          (try
+            (let [detections (read-predictions-json predictions-json-path)]
+              (log/infof "Animal detection completed for video=%s results=%s"
+                         video-path
+                         detections)
+              {:ok? true
+               :detections detections})
+            (catch Exception e
+              {:ok? false
+               :error (or (.getMessage e) "invalid-detection-json")
+               :raw-output (:out result)}))
           {:ok? false
-           :error (or (.getMessage e) "invalid-detection-json")
-           :raw-output (:out result)}))
-      {:ok? false
-       :error (or (:err result) "speciesnet command failed")})))
+           :error (or (:err result) "speciesnet command failed")})))))
 
 (defn- run-undetected-video-detection-loop! [datasource]
   (loop [processed 0]
