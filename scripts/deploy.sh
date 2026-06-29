@@ -77,13 +77,13 @@ if [[ -z "$HOST" ]]; then
   exit 1
 fi
 
-echo "[1/4] Building image: $IMAGE"
+echo "[1/5] Building image: $IMAGE"
 docker build -t "$IMAGE" "$LOCAL_CONTEXT"
 
-echo "[2/4] Transferring image to $HOST"
+echo "[2/5] Transferring image to $HOST"
 docker save "$IMAGE" | ssh "$HOST" 'sudo docker load'
 
-echo "[3/4] Uploading remote deploy script"
+echo "[3/5] Uploading remote deploy script"
 REMOTE_SCRIPT="/tmp/videoahmatti-deploy-$(date +%s).sh"
 
 cat <<'REMOTE_DEPLOY' | ssh "$HOST" "cat > '$REMOTE_SCRIPT' && chmod +x '$REMOTE_SCRIPT'"
@@ -111,7 +111,10 @@ docker run -d \
   "$IMAGE"
 REMOTE_DEPLOY
 
-echo "[4/4] Executing remote deploy script with sudo"
+echo "[4/5] Executing remote deploy script with sudo"
 ssh "$HOST" "sudo '$REMOTE_SCRIPT' '$CONTAINER' '$IMAGE' '$REMOTE_VIDEOS' '$REMOTE_DATA' '$PORT'; sudo rm -f '$REMOTE_SCRIPT'"
+
+echo "[5/5] Cleaning up dangling Docker resources on $HOST"
+ssh "$HOST" "sudo docker system prune --volumes --force"
 
 echo "Deploy complete."

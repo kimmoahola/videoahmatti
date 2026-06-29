@@ -2,4 +2,5 @@
        :port #long #or [#env VIDEOAHMATTI_PORT 8080]
        :video-root #or [#env VIDEOAHMATTI_VIDEO_ROOT "./videos"]}
  :db {:jdbc-url #or [#env VIDEOAHMATTI_JDBC_URL "jdbc:sqlite:./data/videoahmatti.db"]}
- :jobs {:scan-interval-seconds #long #or [#env VIDEOAHMATTI_SCAN_INTERVAL_SECONDS 60]}}
+ :jobs {:scan-interval-seconds #long #or [#env VIDEOAHMATTI_SCAN_INTERVAL_SECONDS 60]
+        :cleanup-interval-seconds #long #or [#env VIDEOAHMATTI_CLEANUP_INTERVAL_SECONDS 86400]}}

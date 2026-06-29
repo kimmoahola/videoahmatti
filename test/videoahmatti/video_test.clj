@@ -4,8 +4,7 @@
    [clojure.test :refer [deftest is testing]]
    [jsonista.core :as json]
    [videoahmatti.db :as db]
-   [videoahmatti.video :as video]
-   [videoahmatti.workers :as workers]))
+   [videoahmatti.video :as video]))
 
 (def mapper
   (json/object-mapper {:decode-key-fn keyword}))
@@ -16,10 +15,10 @@
                                         {:id 1
                                          :filename "camera_00_20260222075326.mp4"
                                          :storage_path "/tmp/fake.mp4"})
-                  workers/convert-video-to-compatible-temp-file (fn [_video-path]
-                                                                  {:ok? false
-                                                                   :busy? true
-                                                                   :error "video-conversion-busy"})]
+                  video/convert-video-to-compatible-temp-file (fn [_video-path]
+                                                                {:ok? false
+                                                                 :busy? true
+                                                                 :error "video-conversion-busy"})]
       (let [response (video/download-video-compatible {:datasource ::fake} {} 1)
             body (json/read-value (:body response) mapper)]
         (is (= 429 (:status response)))

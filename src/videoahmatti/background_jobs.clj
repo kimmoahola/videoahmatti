@@ -3,10 +3,12 @@
    [clojure.core.async :as async]
    [clojure.tools.logging :as log]
    [videoahmatti.detection :as detection]
+   [videoahmatti.video-cleanup :as video-cleanup]
    [videoahmatti.videos-scan :as videos-scan]))
 
 (defonce background-jobs {:scan-videos (atom false)
-                          :detection (atom false)})
+                          :detection (atom false)
+                          :cleanup (atom false)})
 
 (defn- run-exclusive-job! [job-key trigger f]
   (let [job-atom (get background-jobs job-key)]
@@ -39,6 +41,14 @@
    (fn []
      (videos-scan/scan-videos! cfg datasource)
      (trigger-detection-pass! datasource :scan-finished))))
+
+(defn trigger-video-cleanup! [cfg datasource trigger]
+  (run-exclusive-job!
+   :cleanup
+   trigger
+   (fn []
+     (log/infof "trigger-video-cleanup! result (trigger=%s): %s" trigger
+                (video-cleanup/delete-old-videos! cfg datasource)))))
 
 (defn ensure-python-deps!
   "Ensures that the Python dependencies are installed.
@@ -73,6 +83,22 @@
           (log/info "Video scan scheduler stopped")
           (do
             (trigger-video-scan! cfg datasource :interval)
+            (recur)))))
+    {:stop-chan stop-chan
+     :interval-seconds interval-seconds}))
+
+(defn start-video-cleanup-scheduler! [cfg datasource]
+  (let [interval-seconds (get-in cfg [:jobs :cleanup-interval-seconds] 86400)
+        interval-ms (* 1000 interval-seconds)
+        stop-chan (async/chan)]
+    (log/infof "Starting periodic video cleanup scheduler (interval=%ss)" interval-seconds)
+    (trigger-video-cleanup! cfg datasource :startup)
+    (async/go-loop []
+      (let [[_ channel] (async/alts! [stop-chan (async/timeout interval-ms)])]
+        (if (= channel stop-chan)
+          (log/info "Video cleanup scheduler stopped")
+          (do
+            (trigger-video-cleanup! cfg datasource :interval)
             (recur)))))
     {:stop-chan stop-chan
      :interval-seconds interval-seconds}))

@@ -12,5 +12,6 @@
         datasource (db/make-datasource cfg)]
     (db/ensure-schema! datasource)
     (server/start! cfg datasource)
+    (background-jobs/start-video-cleanup-scheduler! cfg datasource)
     (background-jobs/start-video-scan-scheduler! cfg datasource)
     (log/info "Videoahmatti started")))

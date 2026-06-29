@@ -105,6 +105,16 @@
                             limit 1"]
                           {:builder-fn rs/as-unqualified-lower-maps}))))
 
+(defn list-videos-discovered-before [datasource timestamp]
+  (mapv with-parsed-detections
+        (jdbc/execute! datasource
+                       ["select id, storage_path, filename, detections, duration_sec, discovered_at
+                         from videos
+                         where discovered_at < ?
+                         order by id asc"
+                        timestamp]
+                       {:builder-fn rs/as-unqualified-lower-maps})))
+
 (defn set-video-detections! [datasource video-id detections]
   (jdbc/execute-one!
    datasource
@@ -113,6 +123,18 @@
      where id = ?"
     (write-detections detections)
     video-id]))
+
+(defn delete-videos-by-storage-paths! [datasource storage-paths]
+  (let [paths (->> storage-paths
+                   (remove str/blank?)
+                   distinct
+                   vec)]
+    (if (empty? paths)
+      0
+      (let [placeholders (str/join "," (repeat (count paths) "?"))
+            sql (str "delete from videos where storage_path in (" placeholders ")")
+            result (jdbc/execute-one! datasource (into [sql] paths))]
+        (or (:next.jdbc/update-count result) 0)))))
 
 (defn find-thumbnail [datasource video-id]
   (first (jdbc/execute! datasource ["select id, video_id, image_blob, width, height, mime_type, generated_at from thumbnails where video_id = ?" video-id] {:builder-fn rs/as-unqualified-lower-maps})))

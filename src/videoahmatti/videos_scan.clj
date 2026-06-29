@@ -7,7 +7,7 @@
   (:import
    (java.nio.file Files)))
 
-(def ^:private video-extensions
+(def video-extensions
   #{"mp4" "mkv" "webm" "mov" "avi" "m4v"})
 
 (defn- extension-of [filename]
