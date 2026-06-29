@@ -64,7 +64,9 @@
         (.waitFor process)
         (log/info "Python virtual environment created")))
     (log/info "Installing Python dependencies...")
-    (let [process (-> (ProcessBuilder. [pip-path "install" "--disable-pip-version-check" "-r" "requirements.txt"])
+    (let [process (-> (ProcessBuilder. [pip-path "install" "--no-cache-dir"
+                                        "--disable-pip-version-check"
+                                        "-r" "requirements.txt"])
                       (.redirectErrorStream true)
                       (.start))]
       (.waitFor process)
